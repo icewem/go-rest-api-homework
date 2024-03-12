@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -46,6 +45,7 @@ func getTasks(w http.ResponseWriter, req *http.Request) {
 	resp, err := json.Marshal(tasks)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -55,15 +55,7 @@ func getTasks(w http.ResponseWriter, req *http.Request) {
 
 func addTask(w http.ResponseWriter, req *http.Request) {
 	var task Task
-	var buf bytes.Buffer
-
-	_, err := buf.ReadFrom(req.Body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if err = json.Unmarshal(buf.Bytes(), &task); err != nil {
+	if err := json.NewDecoder(req.Body).Decode(&task); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -74,13 +66,13 @@ func addTask(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
-func getOneTask(w http.ResponseWriter, req *http.Request) {
+func getTask(w http.ResponseWriter, req *http.Request) {
 	id := chi.URLParam(req, "id")
 
 	task, ok := tasks[id]
 	if !ok {
-		http.Error(w, "getOneTask not found", http.StatusNoContent)
-		return
+		errMsg := fmt.Sprintf("Task ID: %s not found", id)
+		http.Error(w, errMsg, http.StatusBadRequest)
 	}
 
 	resp, err := json.Marshal(task)
@@ -98,7 +90,8 @@ func delTask(w http.ResponseWriter, req *http.Request) {
 
 	task, ok := tasks[id]
 	if !ok {
-		http.Error(w, "delTask nor found", http.StatusNoContent)
+		errMsg := fmt.Sprintf("Task ID: %s not found", id)
+		http.Error(w, errMsg, http.StatusBadRequest)
 	}
 
 	delete(tasks, task.ID)
@@ -113,7 +106,7 @@ func main() {
 	// здесь регистрируйте ваши обработчики
 	r.Get("/tasks", getTasks)
 	r.Post("/tasks", addTask)
-	r.Get("/tasks/{id}", getOneTask)
+	r.Get("/tasks/{id}", getTask)
 	r.Delete("/tasks/{id}", delTask)
 	if err := http.ListenAndServe(":8080", r); err != nil {
 		fmt.Printf("Ошибка при запуске сервера: %s", err.Error())
